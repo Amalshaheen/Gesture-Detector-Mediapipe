@@ -1,6 +1,7 @@
 import os
 import time
 import math
+import socket
 
 import mediapipe as mp
 
@@ -17,6 +18,63 @@ VisionRunningMode = mp.tasks.vision.RunningMode
 # Create a hand landmarker instance with the live stream mode:
 latest_result = None
 current_gesture = None
+last_sent_command = None
+last_command_time = 0
+COMMAND_COOLDOWN = 0.5  # Send command every 0.5 seconds to avoid spam
+
+# Gesture to wheelchair command mapping (optimized for top-down camera view)
+GESTURE_COMMANDS = {
+    "OPEN PALM": "S",      # Stop - default/safe position (5 fingers)
+    "FIST": "F",           # Forward - closed fist (0 fingers)
+    "POINTING": "B",       # Backward - single finger (1 finger)
+    "PEACE": "L",          # Left - two fingers (2 fingers)
+    "THREE": "R",          # Right - three fingers (3 fingers) - symmetric progression
+    "FOUR": "H",           # Horn - four fingers (4 fingers)
+    "ROCK": "E",           # Emergency - pinky+index (SOS beep pattern)
+}
+
+# ESP32 Bluetooth connection
+ESP32_MAC = "A0:B7:65:26:0F:1E"
+bluetooth_socket = None
+
+def connect_bluetooth():
+    """Connect to ESP32 via Bluetooth."""
+    global bluetooth_socket
+    try:
+        bluetooth_socket = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+        bluetooth_socket.connect((ESP32_MAC, 1))  # Channel 1 is standard for SPP
+        print(f"✓ Connected to ESP32 at {ESP32_MAC}")
+        return True
+    except Exception as e:
+        print(f"✗ Bluetooth connection failed: {e}")
+        print("  Continuing in demo mode (no commands will be sent)")
+        bluetooth_socket = None
+        return False
+
+def send_command(command):
+    """Send command to ESP32 via Bluetooth."""
+    global last_sent_command, last_command_time
+    
+    current_time = time.time()
+    
+    # Debounce: only send if command changed or cooldown elapsed
+    if command == last_sent_command and (current_time - last_command_time) < COMMAND_COOLDOWN:
+        return
+    
+    if bluetooth_socket:
+        try:
+            bluetooth_socket.send(command.encode())
+            print(f"→ Sent: {command}")
+            last_sent_command = command
+            last_command_time = current_time
+        except Exception as e:
+            print(f"✗ Failed to send command: {e}")
+    else:
+        # Demo mode - just print
+        if command != last_sent_command or (current_time - last_command_time) >= COMMAND_COOLDOWN:
+            print(f"→ [DEMO] Command: {command}")
+            last_sent_command = command
+            last_command_time = current_time
 
 
 def print_result(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
@@ -123,6 +181,11 @@ options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.LIVE_STREAM,
     result_callback=print_result)
+
+# Connect to ESP32 Bluetooth
+print("Connecting to ESP32...")
+connect_bluetooth()
+
 with HandLandmarker.create_from_options(options) as landmarker:
     # Continuously capture images from the webcam and feed them into the hand landmarker:
     import cv2
@@ -170,17 +233,48 @@ with HandLandmarker.create_from_options(options) as landmarker:
                 gesture = detect_gesture(hand_landmarks)
                 gestures.append(gesture)
             
-            # Display detected gestures on screen
-            y_offset = 50
-            for i, gesture in enumerate(gestures):
-                text = f"Hand {i+1}: {gesture}"
-                cv2.putText(image, text, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                           1, (255, 255, 0), 2, cv2.LINE_AA)
-                y_offset += 50
+            # Use the first detected hand's gesture for control
+            if gestures:
+                primary_gesture = gestures[0]
+                
+                # Send wheelchair command if gesture is mapped
+                if primary_gesture in GESTURE_COMMANDS:
+                    command = GESTURE_COMMANDS[primary_gesture]
+                    send_command(command)
+                    
+                    # Display gesture and command
+                    cv2.putText(image, f"Gesture: {primary_gesture}", (10, 50), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+                    cv2.putText(image, f"Command: {command}", (10, 100), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3, cv2.LINE_AA)
+                else:
+                    # Gesture detected but not mapped
+                    cv2.putText(image, f"Gesture: {primary_gesture}", (10, 50), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2, cv2.LINE_AA)
+                    cv2.putText(image, "No command", (10, 100), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2, cv2.LINE_AA)
+        else:
+            # No hand detected
+            cv2.putText(image, "No hand detected", (10, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         
-        cv2.imshow('Gesture Detector', image)
+        # Display connection status
+        status = "Connected" if bluetooth_socket else "Demo Mode"
+        status_color = (0, 255, 0) if bluetooth_socket else (255, 0, 0)
+        cv2.putText(image, f"BT: {status}", (10, image.shape[0] - 20), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2, cv2.LINE_AA)
+        
+        cv2.imshow('Wheelchair Gesture Control', image)
         if cv2.waitKey(1) & 0xFF == 27:
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    
+    # Close Bluetooth connection
+    if bluetooth_socket:
+        try:
+            bluetooth_socket.close()
+            print("✓ Bluetooth connection closed")
+        except:
+            pass
