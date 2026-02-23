@@ -23,15 +23,14 @@ last_sent_command = None
 last_command_time = 0
 COMMAND_COOLDOWN = 0.5  # Send command every 0.5 seconds to avoid spam
 
-# Gesture to wheelchair command mapping (optimized for top-down camera view)
+# Gesture to wheelchair command mapping
 GESTURE_COMMANDS = {
-    "OPEN PALM": "S",      # Stop - default/safe position (5 fingers)
-    "FIST": "F",           # Forward - closed fist (0 fingers)
-    "POINTING": "B",       # Backward - single finger (1 finger)
-    "PEACE": "L",          # Left - two fingers (2 fingers)
-    "THREE": "R",          # Right - three fingers (3 fingers) - symmetric progression
-    "FOUR": "H",           # Horn - four fingers (4 fingers)
-    "ROCK": "E",           # Emergency - pinky+index (SOS beep pattern)
+    "OPEN PALM": "S",      # Stop - 5 fingers extended
+    "ROCK": "F",           # Forward - index + pinky extended
+    "THREE": "R",          # Right - thumb + index + middle extended
+    "PEACE": "R",          # Right - index + middle extended (same as three)
+    "L SHAPE": "L",        # Left - thumb + index extended (L shape)
+    "FIST": "B",           # Back - all fingers closed
 }
 
 # ESP32 Bluetooth connection settings
@@ -169,53 +168,34 @@ def detect_gesture(hand_landmarks):
     # Count extended fingers
     fingers_up = sum([thumb_extended, index_extended, middle_extended, ring_extended, pinky_extended])
     
-    # Detect specific gestures
-    # Fist - all fingers closed
+    # Detect only the required gestures
+    
+    # Fist - all fingers closed (BACK)
     if fingers_up == 0:
         return "FIST"
     
-    # Open Palm - all fingers extended
+    # Open Palm - all fingers extended (STOP)
     if fingers_up == 5:
         return "OPEN PALM"
     
-    # Thumbs Up - only thumb extended
-    if thumb_extended and not index_extended and not middle_extended and not ring_extended and not pinky_extended:
-        # Check if thumb is pointing up
-        if landmarks[4].y < landmarks[2].y:
-            return "THUMBS UP"
-        else:
-            return "THUMBS DOWN"
-    
-    # Pointing - only index finger extended
-    if not thumb_extended and index_extended and not middle_extended and not ring_extended and not pinky_extended:
-        return "POINTING"
-    
-    # Peace/Victory - index and middle fingers extended
-    if not thumb_extended and index_extended and middle_extended and not ring_extended and not pinky_extended:
-        return "PEACE"
-    
-    # Rock/Horn - index and pinky extended, thumb can be extended or not
+    # Rock/Horn - index and pinky extended (FORWARD)
     if index_extended and not middle_extended and not ring_extended and pinky_extended:
         return "ROCK"
     
-    # OK Sign - thumb and index finger touch, others extended
-    thumb_tip = landmarks[4]
-    index_tip = landmarks[8]
-    distance = get_distance(thumb_tip, index_tip)
+    # L Shape - thumb and index extended only (LEFT)
+    if thumb_extended and index_extended and not middle_extended and not ring_extended and not pinky_extended:
+        return "L SHAPE"
     
-    if distance < 0.05 and middle_extended and ring_extended and pinky_extended:
-        return "OK"
+    # Peace - index and middle fingers extended (RIGHT)
+    if not thumb_extended and index_extended and middle_extended and not ring_extended and not pinky_extended:
+        return "PEACE"
     
-    # Three fingers (counting gesture)
+    # Three - thumb, index, and middle extended (RIGHT)
     if thumb_extended and index_extended and middle_extended and not ring_extended and not pinky_extended:
         return "THREE"
     
-    # Four fingers
-    if not thumb_extended and index_extended and middle_extended and ring_extended and pinky_extended:
-        return "FOUR"
-    
-    # Generic counting
-    return f"{fingers_up} FINGERS"
+    # No recognized gesture
+    return "UNKNOWN"
 
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=model_path),
