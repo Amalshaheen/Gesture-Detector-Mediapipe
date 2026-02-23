@@ -1,7 +1,8 @@
 import os
 import time
 import math
-import socket
+import serial
+import serial.tools.list_ports
 
 import mediapipe as mp
 
@@ -33,26 +34,54 @@ GESTURE_COMMANDS = {
     "ROCK": "E",           # Emergency - pinky+index (SOS beep pattern)
 }
 
-# ESP32 Bluetooth connection
-ESP32_MAC = "A0:B7:65:26:0F:1E"
-bluetooth_socket = None
+# ESP32 Bluetooth connection settings
+# --- CHANGE THIS TO YOUR ACTUAL PORT ---
+# Windows example: 'COM9'
+# Mac example: '/dev/cu.ESP32_LED_Control-ESP32SPP'
+# Linux example: '/dev/rfcomm0'
+COM_PORT = 'COM9'
+BAUD_RATE = 115200
+bluetooth_serial = None
+
+def list_available_ports():
+    """List all available serial ports."""
+    ports = serial.tools.list_ports.comports()
+    if ports:
+        print("Available serial ports:")
+        for port in ports:
+            print(f"  - {port.device}: {port.description}")
+    else:
+        print("No serial ports found.")
+    return ports
 
 def connect_bluetooth():
-    """Connect to ESP32 via Bluetooth."""
-    global bluetooth_socket
+    """Connect to ESP32 via Bluetooth Serial."""
+    global bluetooth_serial
     try:
-        bluetooth_socket = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-        bluetooth_socket.connect((ESP32_MAC, 1))  # Channel 1 is standard for SPP
-        print(f"✓ Connected to ESP32 at {ESP32_MAC}")
+        print(f"Attempting to connect to {COM_PORT}...")
+        bluetooth_serial = serial.Serial(COM_PORT, BAUD_RATE, timeout=1)
+        time.sleep(0.5)  # Give time for connection to stabilize
+        print(f"✓ Successfully connected to ESP32 on {COM_PORT}!")
         return True
-    except Exception as e:
+    except serial.SerialException as e:
         print(f"✗ Bluetooth connection failed: {e}")
+        print(f"  Could not open port {COM_PORT}")
+        print("  Tips:")
+        print("  1. Check the COM_PORT variable in the script")
+        print("  2. Ensure ESP32 is paired with your laptop")
+        print("  3. Check available ports below:")
+        list_available_ports()
         print("  Continuing in demo mode (no commands will be sent)")
-        bluetooth_socket = None
+        bluetooth_serial = None
+        return False
+    except Exception as e:
+        print(f"✗ Unexpected error: {e}")
+        print("  Continuing in demo mode")
+        bluetooth_serial = None
         return False
 
 def send_command(command):
-    """Send command to ESP32 via Bluetooth."""
+    """Send command to ESP32 via Bluetooth Serial."""
     global last_sent_command, last_command_time
     
     current_time = time.time()
@@ -61,12 +90,23 @@ def send_command(command):
     if command == last_sent_command and (current_time - last_command_time) < COMMAND_COOLDOWN:
         return
     
-    if bluetooth_socket:
+    if bluetooth_serial and bluetooth_serial.is_open:
         try:
-            bluetooth_socket.send(command.encode())
+            # Send command to ESP32
+            bluetooth_serial.write(command.encode('utf-8'))
             print(f"→ Sent: {command}")
+            
+            # Wait briefly and check for response
+            time.sleep(0.05)
+            if bluetooth_serial.in_waiting > 0:
+                response = bluetooth_serial.readline().decode('utf-8').strip()
+                print(f"  ESP32: {response}")
+            
             last_sent_command = command
             last_command_time = current_time
+        except serial.SerialException as e:
+            print(f"✗ Serial error: {e}")
+            print("  Connection may be lost. Continuing in demo mode.")
         except Exception as e:
             print(f"✗ Failed to send command: {e}")
     else:
@@ -259,8 +299,8 @@ with HandLandmarker.create_from_options(options) as landmarker:
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         
         # Display connection status
-        status = "Connected" if bluetooth_socket else "Demo Mode"
-        status_color = (0, 255, 0) if bluetooth_socket else (255, 0, 0)
+        status = "Connected" if (bluetooth_serial and bluetooth_serial.is_open) else "Demo Mode"
+        status_color = (0, 255, 0) if (bluetooth_serial and bluetooth_serial.is_open) else (255, 0, 0)
         cv2.putText(image, f"BT: {status}", (10, image.shape[0] - 20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2, cv2.LINE_AA)
         
@@ -272,9 +312,9 @@ with HandLandmarker.create_from_options(options) as landmarker:
     cv2.destroyAllWindows()
     
     # Close Bluetooth connection
-    if bluetooth_socket:
+    if bluetooth_serial and bluetooth_serial.is_open:
         try:
-            bluetooth_socket.close()
-            print("✓ Bluetooth connection closed")
-        except:
-            pass
+            bluetooth_serial.close()
+            print("✓ Bluetooth serial connection closed")
+        except Exception as e:
+            print(f"✗ Error closing connection: {e}")
