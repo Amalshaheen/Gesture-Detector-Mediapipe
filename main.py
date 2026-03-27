@@ -2,7 +2,6 @@ import os
 import time
 import math
 import serial
-import serial.tools.list_ports
 import cv2
 import mediapipe as mp
 
@@ -20,7 +19,8 @@ VisionRunningMode = mp.tasks.vision.RunningMode
 latest_result = None
 last_sent_command = None
 last_command_time = 0
-COMMAND_COOLDOWN = 0.3
+COMMAND_COOLDOWN = 1
+camera_index = 1  # Default camera index (0 for built-in webcam)
 
 GESTURE_COMMANDS = {
     "FORWARD": "F",
@@ -55,21 +55,21 @@ def send_command(command_key):
     
     command_char = GESTURE_COMMANDS.get(command_key, "S")
 
-    if command_char == last_sent_command and (current_time - last_command_time) < COMMAND_COOLDOWN:
-        return
-    
-    if bluetooth_serial and bluetooth_serial.is_open:
-        try:
-            bluetooth_serial.write(command_char.encode('utf-8'))
-            last_sent_command = command_char
-            last_command_time = current_time
-        except Exception as e:
-            print(f"✗ Send error: {e}")
-    else:
-        if command_char != last_sent_command or (current_time - last_command_time) >= COMMAND_COOLDOWN:
-            print(f"→ [DEMO] Sent: {command_key} ({command_char})")
-            last_sent_command = command_char
-            last_command_time = current_time
+    # Only send if the command is DIFFERENT from the last one
+    if command_char != last_sent_command:
+        # Add a tiny 0.1s debounce limit to prevent noisy fluttering
+        if (current_time - last_command_time) >= 0.1:
+            if bluetooth_serial and bluetooth_serial.is_open:
+                try:
+                    bluetooth_serial.write(command_char.encode('utf-8'))
+                    last_sent_command = command_char
+                    last_command_time = current_time
+                except Exception as e:
+                    print(f"✗ Send error: {e}")
+            else:
+                print(f"→ [DEMO] Sent: {command_key} ({command_char})")
+                last_sent_command = command_char
+                last_command_time = current_time
 
 def print_result(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     global latest_result
@@ -133,7 +133,7 @@ options = HandLandmarkerOptions(
 connect_bluetooth()
 
 with HandLandmarker.create_from_options(options) as landmarker:
-    cap = cv2.VideoCapture(4)
+    cap = cv2.VideoCapture(camera_index)
     
     while cap.isOpened():
         success, image = cap.read()
