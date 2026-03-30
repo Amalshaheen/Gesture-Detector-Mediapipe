@@ -1,5 +1,4 @@
 ##Pending Task
-- Backward Gesture
 - Testing
 
 ## Telegram Emergency Alert Setup

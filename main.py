@@ -45,7 +45,7 @@ latest_result = None
 last_sent_command = None
 last_command_time = 0
 COMMAND_COOLDOWN = 1
-camera_index = 1  # Default camera index (0 for built-in webcam)
+camera_index = 4  # Default camera index (0 for built-in webcam)
 
 GESTURE_COMMANDS = {
     "FORWARD": "F",
@@ -229,6 +229,8 @@ def detect_joystick_gesture(landmarks):
     index_tip = landmarks[8]
     middle_mcp = landmarks[9]
     middle_tip = landmarks[12]
+    ring_mcp = landmarks[13]
+    ring_tip = landmarks[16]
     pinky_mcp = landmarks[17]
     pinky_tip = landmarks[20]
 
@@ -239,23 +241,30 @@ def detect_joystick_gesture(landmarks):
     # Finger extensions relative to base scale
     mag_index = math.hypot(index_tip.x - index_mcp.x, index_tip.y - index_mcp.y)
     mag_middle = math.hypot(middle_tip.x - middle_mcp.x, middle_tip.y - middle_mcp.y)
+    mag_ring = math.hypot(ring_tip.x - ring_mcp.x, ring_tip.y - ring_mcp.y)
     mag_pinky = math.hypot(pinky_tip.x - pinky_mcp.x, pinky_tip.y - pinky_mcp.y)
+    index_ratio = mag_index / mag_base
+    middle_ratio = mag_middle / mag_base
+    ring_ratio = mag_ring / mag_base
+    pinky_ratio = mag_pinky / mag_base
 
     # 1. EMERGENCY: Flat hand (Pinky and Middle extended outwards)
-    if (mag_middle / mag_base) > 0.8 and (mag_pinky / mag_base) > 0.8:
+    if middle_ratio > 0.8 and pinky_ratio > 0.8:
         return "EMERGENCY"
 
-    # 2. HORN: Scissor (Middle extended and far from index tip)
-    scissor_dist = math.hypot(index_tip.x - middle_tip.x, index_tip.y - middle_tip.y)
-    if (mag_middle / mag_base) > 0.5 and (scissor_dist / mag_base) > 0.6:
+    # 2. BACKWARD: Two-finger gesture (index + middle up, ring + pinky down)
+    if index_ratio > 0.65 and middle_ratio > 0.65 and ring_ratio < 0.55 and pinky_ratio < 0.55:
+        return "BACKWARD"
+
+    # 3. HORN: Fist (all non-thumb fingers curled)
+    if index_ratio < 0.55 and middle_ratio < 0.55 and ring_ratio < 0.55 and pinky_ratio < 0.55:
         return "HORN"
 
-    # 3. STOP: Index finger resting/curled
-    index_ratio = mag_index / mag_base
+    # 4. STOP: Index finger resting/curled
     if index_ratio < 0.65:
         return "STOP"
 
-    # 4. DIRECTIONAL: Absolute angle of index finger in camera frame
+    # 5. DIRECTIONAL: Absolute angle of index finger in camera frame
     dx = index_tip.x - index_mcp.x
     dy = index_tip.y - index_mcp.y
     angle = math.degrees(math.atan2(dy, dx))
@@ -263,14 +272,14 @@ def detect_joystick_gesture(landmarks):
     # Absolute Camera frame angles (Y is down in OpenCV):
     # Straight Up = -90, Left = -180/180, Right = 0, Down = 90
     print(f"Angle: {angle:.1f}°, Index Ratio: {index_ratio:.2f}")
-    if -115 <= angle <= -65:
+    if -115 <= angle <= -75:
         return "FORWARD"
-    elif -65 < angle <= 20:
+    elif -75 < angle <= 20:
         return "RIGHT"
     elif angle < -115 or angle > 135:
         return "LEFT"
     else:
-        return "BACKWARD"
+        return "STOP"
 
 
 options = HandLandmarkerOptions(
@@ -299,7 +308,7 @@ with HandLandmarker.create_from_options(options) as landmarker:
             
             # Draw primary landmarks for visual feedback
             h, w = image.shape[:2]
-            for idx in [0, 5, 8, 9, 12, 17, 20]:
+            for idx in [0, 4, 5, 8, 9, 12, 13, 16, 17, 20]:
                 lm = hand_landmarks[idx]
                 cv2.circle(image, (int(lm.x * w), int(lm.y * h)), 5, (0, 255, 0), -1)
 
