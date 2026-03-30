@@ -1,12 +1,37 @@
 import os
 import time
 import math
+import json
+import threading
+import urllib.parse
+import urllib.request
+import urllib.error
 import serial
 import cv2
 import mediapipe as mp
 
+
+def load_env_file(env_path):
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+
+            # Keep exported shell vars as higher priority than file values.
+            if key and key not in os.environ:
+                os.environ[key] = value
+
 # MediaPipe Setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_env_file(os.path.join(BASE_DIR, ".env"))
 model_path = os.path.join(BASE_DIR, 'hand_landmarker.task')
 
 BaseOptions = mp.tasks.BaseOptions
@@ -36,6 +61,19 @@ GESTURE_COMMANDS = {
 COM_PORT = '/dev/rfcomm0'
 BAUD_RATE = 115200
 bluetooth_serial = None
+
+# Telegram Emergency Alert Settings
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+STARTUP_ALERT_ENABLED = os.getenv("STARTUP_ALERT_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+EMERGENCY_ALERT_COOLDOWN = 15  # seconds
+last_emergency_alert_time = 0
+emergency_latched = False
+resolved_telegram_chat_id = TELEGRAM_CHAT_ID
+chat_id_lookup_lock = threading.Lock()
+last_chat_id_lookup_time = 0
+CHAT_ID_LOOKUP_RETRY_SECONDS = 10
+telegram_conflict_hint_printed = False
 
 def connect_bluetooth():
     global bluetooth_serial
@@ -71,7 +109,117 @@ def send_command(command_key):
                 last_sent_command = command_char
                 last_command_time = current_time
 
-def print_result(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
+
+def send_telegram_message(message_text):
+    chat_id = get_telegram_chat_id()
+    if not TELEGRAM_BOT_TOKEN or not chat_id:
+        return
+
+    try:
+        endpoint = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": message_text
+        }).encode("utf-8")
+
+        request = urllib.request.Request(endpoint, data=payload, method="POST")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            response.read()
+        print("✓ Telegram alert sent")
+    except Exception as e:
+        print(f"✗ Telegram alert failed: {e}")
+
+
+def get_telegram_chat_id():
+    global resolved_telegram_chat_id, last_chat_id_lookup_time, telegram_conflict_hint_printed
+
+    if resolved_telegram_chat_id:
+        return resolved_telegram_chat_id
+
+    if not TELEGRAM_BOT_TOKEN:
+        now = time.time()
+        if (now - last_chat_id_lookup_time) < CHAT_ID_LOOKUP_RETRY_SECONDS:
+            return ""
+
+        # Telegram getUpdates only allows one active long-poll request.
+        # Guard this lookup so async alert threads do not race each other.
+        with chat_id_lookup_lock:
+            now = time.time()
+            if resolved_telegram_chat_id:
+                return resolved_telegram_chat_id
+            if (now - last_chat_id_lookup_time) < CHAT_ID_LOOKUP_RETRY_SECONDS:
+                return ""
+            last_chat_id_lookup_time = now
+
+            try:
+                endpoint = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+                with urllib.request.urlopen(endpoint, timeout=5) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+
+                results = data.get("result", [])
+                if not results:
+                    print("! Telegram chat_id not found. Message your bot once, then retry.")
+                    return ""
+
+                last_update = results[-1]
+                message = last_update.get("message", {})
+                chat = message.get("chat", {})
+                chat_id = chat.get("id")
+                if chat_id is None:
+                    return ""
+
+                resolved_telegram_chat_id = str(chat_id)
+                print(f"✓ Telegram chat_id detected: {resolved_telegram_chat_id}")
+                return resolved_telegram_chat_id
+            except urllib.error.HTTPError as e:
+                if e.code == 409 and not telegram_conflict_hint_printed:
+                    telegram_conflict_hint_printed = True
+                    print("! Telegram 409 conflict: disable webhook or set TELEGRAM_CHAT_ID in .env directly.")
+                else:
+                    print(f"✗ Could not resolve Telegram chat_id: HTTP {e.code}")
+                return ""
+            except Exception as e:
+                print(f"✗ Could not resolve Telegram chat_id: {e}")
+                return ""
+
+
+def send_telegram_message_async(message_text):
+    thread = threading.Thread(target=send_telegram_message, args=(message_text,), daemon=True)
+    thread.start()
+
+
+def handle_emergency_alerts(current_command):
+    global last_emergency_alert_time, emergency_latched
+
+    now = time.time()
+
+    if current_command == "EMERGENCY":
+        # Latch the emergency state and alert once per cooldown window.
+        if (not emergency_latched) or (now - last_emergency_alert_time >= EMERGENCY_ALERT_COOLDOWN):
+            emergency_latched = True
+            last_emergency_alert_time = now
+            alert_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            send_telegram_message_async(
+                f"🚨 EMERGENCY gesture detected!\nTime: {alert_time}"
+            )
+    elif emergency_latched:
+        emergency_latched = False
+        clear_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        send_telegram_message_async(
+            f"✅ Emergency gesture cleared.\nTime: {clear_time}"
+        )
+
+
+def send_startup_notification():
+    if not STARTUP_ALERT_ENABLED:
+        return
+
+    start_time = time.strftime("%Y-%m-%d %H:%M:%S")
+    send_telegram_message_async(
+        f"🟢 Gesture emergency system is online.\nTime: {start_time}"
+    )
+
+def print_result(result, output_image, timestamp_ms: int):
     global latest_result
     latest_result = result
 
@@ -131,6 +279,7 @@ options = HandLandmarkerOptions(
     result_callback=print_result)
 
 connect_bluetooth()
+send_startup_notification()
 
 with HandLandmarker.create_from_options(options) as landmarker:
     cap = cv2.VideoCapture(camera_index)
@@ -156,6 +305,8 @@ with HandLandmarker.create_from_options(options) as landmarker:
 
             current_command = detect_joystick_gesture(hand_landmarks)
             send_command(current_command)
+
+        handle_emergency_alerts(current_command)
 
         # UI Overlay
         cv2.putText(image, f"CMD: {current_command}", (10, 50), 
