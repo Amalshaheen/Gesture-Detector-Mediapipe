@@ -413,11 +413,6 @@ def calibrate_orientation_sign(finger_scores, landmarks, palm_scale):
     print(f"✓ Orientation calibrated (DOWN sign={orientation_sign})")
 
 
-def _gesture_score(finger_scores, req_ext, req_fold):
-    ext_quality = sum(finger_scores[f] for f in req_ext) / max(len(req_ext), 1)
-    fold_quality = sum((1.0 - finger_scores[f]) for f in req_fold) / max(len(req_fold), 1) if req_fold else 1.0
-    return ext_quality, fold_quality
-
 
 def reset_command_stabilizer():
     global last_stable_command, last_stable_time

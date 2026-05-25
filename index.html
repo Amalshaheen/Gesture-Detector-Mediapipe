@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gesture Detector</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --bg-0: #f8f4ef;
+            --bg-1: #f1e6d7;
+            --bg-2: #fdfbf8;
+            --ink-0: #1d1b16;
+            --ink-1: #473c2b;
+            --accent-0: #d4572a;
+            --accent-1: #4b7d5c;
+            --accent-2: #3c6e8a;
+            --card: #ffffff;
+            --shadow: 0 18px 40px rgba(34, 24, 16, 0.12);
+            --radius-lg: 22px;
+            --radius-md: 14px;
+            --radius-sm: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+            color: var(--ink-0);
+            background: radial-gradient(circle at 12% 12%, rgba(212, 87, 42, 0.08), transparent 40%),
+                radial-gradient(circle at 80% 10%, rgba(60, 110, 138, 0.12), transparent 45%),
+                linear-gradient(160deg, var(--bg-0), var(--bg-1) 45%, var(--bg-2));
+            min-height: 100vh;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+            border-radius: var(--radius-md);
+        }
+
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 24px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 8px 0 28px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .brand-badge {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent-0), var(--accent-2));
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 18px;
+            font-size: 0.95rem;
+        }
+
+        .nav-links a {
+            color: var(--ink-1);
+        }
+
+        .hero {
+            background: rgba(255, 255, 255, 0.88);
+            border-radius: var(--radius-lg);
+            padding: 36px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: auto -20% -40% auto;
+            width: 420px;
+            height: 420px;
+            background: radial-gradient(circle, rgba(75, 125, 92, 0.18), transparent 70%);
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 28px;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .kicker {
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            font-size: 0.72rem;
+            color: var(--accent-0);
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-family: "DM Serif Display", "Times New Roman", serif;
+            font-size: clamp(2.3rem, 3.5vw, 3.7rem);
+            margin: 0 0 16px;
+        }
+
+        .hero p {
+            margin: 0 0 18px;
+            color: var(--ink-1);
+            line-height: 1.6;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-radius: 999px;
+            font-weight: 600;
+            background: var(--accent-0);
+            color: #fff;
+            box-shadow: 0 12px 28px rgba(212, 87, 42, 0.24);
+        }
+
+        .btn.ghost {
+            background: transparent;
+            color: var(--ink-0);
+            border: 1px solid rgba(29, 27, 22, 0.12);
+            box-shadow: none;
+        }
+
+        .hero-media {
+            display: grid;
+            gap: 16px;
+        }
+
+        .hero-media img {
+            box-shadow: 0 18px 40px rgba(18, 16, 12, 0.18);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(75, 125, 92, 0.12);
+            color: var(--accent-1);
+            font-weight: 600;
+            font-size: 0.85rem;
+            width: fit-content;
+        }
+
+        .section {
+            margin-top: 42px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            animation: fadeUp 0.8s ease both;
+        }
+
+        .section h2 {
+            margin: 0 0 12px;
+            font-size: 1.6rem;
+        }
+
+        .section p {
+            margin: 0 0 12px;
+            color: var(--ink-1);
+            line-height: 1.6;
+        }
+
+        .split {
+            display: grid;
+            gap: 22px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: center;
+        }
+
+        .feature-list {
+            display: grid;
+            gap: 10px;
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .feature-list li {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            background: rgba(75, 125, 92, 0.08);
+            font-weight: 500;
+        }
+
+        .gallery {
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .gesture-card {
+            padding: 14px;
+            background: var(--card);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(29, 27, 22, 0.08);
+            display: grid;
+            gap: 10px;
+        }
+
+        .gesture-card h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .tag {
+            display: inline-flex;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(60, 110, 138, 0.12);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--accent-2);
+        }
+
+        .steps {
+            display: grid;
+            gap: 12px;
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .code-block {
+            background: #14110f;
+            color: #f6f0e6;
+            padding: 16px 18px;
+            border-radius: var(--radius-md);
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        footer {
+            margin-top: 36px;
+            text-align: center;
+            color: rgba(29, 27, 22, 0.6);
+            font-size: 0.85rem;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .hero {
+                padding: 28px;
+            }
+
+            .hero-grid,
+            .split {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <div class="topbar">
+            <div class="brand">
+                <div class="brand-badge">GD</div>
+                Gesture Detector
+            </div>
+            <div class="nav-links">
+                <a href="#overview">Overview</a>
+                <a href="#layout">System</a>
+                <a href="#gestures">Gestures</a>
+                <a href="#run">Run</a>
+            </div>
+        </div>
+
+        <header class="hero" id="overview">
+            <div class="hero-grid">
+                <div>
+                    <div class="kicker">Gesture controlled mobility</div>
+                    <h1>Gesture Detector</h1>
+                    <p>
+                        A real time vision system that translates hand gestures into safe wheelchair motion.
+                        MediaPipe landmarks are scored, stabilized, and forwarded to an ESP32 over Bluetooth
+                        with an emergency Telegram alert loop.
+                    </p>
+                    <div class="hero-actions">
+                        <a class="btn" href="README.md">Read the README</a>
+                        <a class="btn ghost" href="CODE_DOCUMENTATION.md">Code documentation</a>
+                    </div>
+                </div>
+                <div class="hero-media">
+                    <img src="statics/chair.jpeg" alt="Wheelchair prototype" />
+                    <div class="badge">ESP32 and MediaPipe in the loop</div>
+                </div>
+            </div>
+        </header>
+
+        <section class="section" id="layout">
+            <div class="split">
+                <div>
+                    <h2>System layout</h2>
+                    <p>
+                        The camera streams to the CPU, MediaPipe extracts hand landmarks, and the classifier
+                        decides the motion command. ESP32 firmware drives the motors and buzzer while the
+                        ultrasonic sensor keeps obstacle clearance in check.
+                    </p>
+                    <ul class="feature-list">
+                        <li>Landmark scoring with palm orientation checks</li>
+                        <li>Command stabilization to avoid flicker</li>
+                        <li>Emergency gesture triggers Telegram alerts</li>
+                        <li>Failsafe STOP on tracking loss</li>
+                    </ul>
+                </div>
+                <div class="gallery">
+                    <img src="statics/DIAGRAM.png" alt="System block diagram" />
+                    <img src="statics/internal%20connection.jpeg" alt="Internal wiring" />
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="gestures">
+            <h2>Gesture map</h2>
+            <p>
+                Each gesture is mapped to a single character command for the ESP32. The classifier
+                blends finger extension and palm orientation for reliable intent recognition.
+            </p>
+            <div class="gallery">
+                <article class="gesture-card">
+                    <img src="statics/gestures/front.jpeg" alt="Forward gesture" />
+                    <h3>Forward</h3>
+                    <span class="tag">Command F</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/back.jpeg" alt="Backward gesture" />
+                    <h3>Backward</h3>
+                    <span class="tag">Command B</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/left.jpeg" alt="Left gesture" />
+                    <h3>Left</h3>
+                    <span class="tag">Command L</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/right.jpeg" alt="Right gesture" />
+                    <h3>Right</h3>
+                    <span class="tag">Command R</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/stop.jpeg" alt="Stop gesture" />
+                    <h3>Stop</h3>
+                    <span class="tag">Command S</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/horn.jpeg" alt="Horn gesture" />
+                    <h3>Horn</h3>
+                    <span class="tag">Command H</span>
+                </article>
+                <article class="gesture-card">
+                    <img src="statics/gestures/sos.jpeg" alt="Emergency gesture" />
+                    <h3>Emergency</h3>
+                    <span class="tag">Command E</span>
+                </article>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="split">
+                <div>
+                    <h2>Pipeline at a glance</h2>
+                    <p>
+                        The classifier scores finger extension, checks palm orientation, and then smooths
+                        predictions over a short history window. This keeps motion stable while still
+                        reacting quickly to intent changes.
+                    </p>
+                    <ol class="steps">
+                        <li>Capture camera frame and run MediaPipe inference.</li>
+                        <li>Compute finger scores and gesture match scores.</li>
+                        <li>Stabilize commands across recent frames.</li>
+                        <li>Send the final command to ESP32 over Bluetooth.</li>
+                    </ol>
+                </div>
+                <div>
+                    <img src="statics/DIAGRAM.png" alt="Pipeline diagram" />
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="run">
+            <h2>Run the project</h2>
+            <p>
+                Install dependencies, pair the ESP32, and launch the main script. If Bluetooth is
+                unavailable, the app continues in demo mode and logs commands to the console.
+            </p>
+            <pre class="code-block"><code>python -m pip install mediapipe opencv-python pyserial
+python main.py</code></pre>
+            <p>
+                Configure Telegram alerts by adding values to .env (see the README for details).
+            </p>
+        </section>
+
+        <footer>
+            Gesture Detector | MediaPipe + ESP32 | Project overview website
+        </footer>
+    </div>
+</body>
+
+</html>
