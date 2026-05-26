@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gesture Detector</title>
+    <title>Gesture Controlled Wheelchair</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -328,14 +328,15 @@
     <div class="page">
         <div class="topbar">
             <div class="brand">
-                <div class="brand-badge">GD</div>
-                Gesture Detector
+                <div class="brand-badge">GCW</div>
+                Gesture Controlled Wheelchair
             </div>
             <div class="nav-links">
                 <a href="#overview">Overview</a>
                 <a href="#layout">System</a>
                 <a href="#gestures">Gestures</a>
                 <a href="#run">Run</a>
+                <a href="#how-to-use">How to use</a>
             </div>
         </div>
 
@@ -343,7 +344,7 @@
             <div class="hero-grid">
                 <div>
                     <div class="kicker">Gesture controlled mobility</div>
-                    <h1>Gesture Detector</h1>
+                    <h1>Gesture Controlled Wheelchair</h1>
                     <p>
                         A real time vision system that translates hand gestures into safe wheelchair motion.
                         MediaPipe landmarks are scored, stabilized, and forwarded to an ESP32 over Bluetooth
@@ -464,8 +465,44 @@ python main.py</code></pre>
             </p>
         </section>
 
+        <section class="section" id="how-to-use">
+            <div class="split">
+                <div>
+                    <h2>How to use</h2>
+                    <p>
+                        Connect your external webcam, confirm the camera index, and verify Bluetooth pairing
+                        before driving the chair.
+                    </p>
+                    <h3>External webcam setup</h3>
+                    <ol class="steps">
+                        <li>Plug in the USB webcam and confirm it is visible to your OS.</li>
+                        <li>Update <strong>camera_index</strong> in <code>main.py</code> (0 = built-in, 1 = external).</li>
+                        <li>Re-run the app and adjust the index if the preview does not open.</li>
+                        <li>Pair the ESP32 named <strong>ESP32_Wheelchair</strong> and update <code>COM_PORT</code> if needed.</li>
+                    </ol>
+                </div>
+                <div>
+                    <h3>ESP32 pin configuration</h3>
+                    <ul class="feature-list">
+                        <li>ENA (Left motor speed) → GPIO 26</li>
+                        <li>IN1 (Left direction) → GPIO 13</li>
+                        <li>IN2 (Left direction) → GPIO 14</li>
+                        <li>ENB (Right motor speed) → GPIO 25</li>
+                        <li>IN3 (Right direction) → GPIO 16</li>
+                        <li>IN4 (Right direction) → GPIO 27</li>
+                        <li>Buzzer → GPIO 19</li>
+                        <li>Ultrasonic TRIG → GPIO 22</li>
+                        <li>Ultrasonic ECHO → GPIO 23</li>
+                    </ul>
+                    <p>
+                        Upload <code>hardwarecode.ino</code> after wiring, then power the motor driver and sensors.
+                    </p>
+                </div>
+            </div>
+        </section>
+
         <footer>
-            Gesture Detector | MediaPipe + ESP32 | Project overview website
+            Gesture Controlled Wheelchair | MediaPipe + ESP32 | Project overview website
         </footer>
     </div>
 </body>
