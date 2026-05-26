@@ -6,14 +6,6 @@ Gesture Detector is a real time hand gesture recognition system that controls a 
 
 Open `index.html` in a browser to view a simple project overview with photos, the system diagram, and the gesture map.
 
-## GitHub Pages preview
-
-This repository includes a GitHub Actions workflow that publishes the static site to GitHub Pages.
-
-1. In the repository settings, set **Pages → Source** to **GitHub Actions**.
-2. Push to `main` or run the workflow manually.
-3. Visit the GitHub Pages URL shown in the workflow output.
-
 ## Key features
 
 - Real time hand tracking with MediaPipe HandLandmarker
